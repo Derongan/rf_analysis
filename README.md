@@ -13,3 +13,6 @@ length: The number of samples contained
 i_values: A list of all i values ordered by time recorded
 q_values: A list of all q values ordered by time recorded
 ```
+The data is expected to be a number of csv files containing an i and q value seperated by a comma
+on each line all within one folder. You can specify the folder by editing the file because I don't
+want to deal with parsing shell arguments right now.
