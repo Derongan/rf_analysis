@@ -19,6 +19,8 @@ def _bytes_feature(value):
 
 
 def create_sequence_example(file_name):
+    device_dict = {}
+    cur_device = 0
     # Yes most of this could be done nicer using a csv parser but I'd rather just get it done
     with open(file_name) as file:
         file_string = os.path.basename(file_name)
@@ -30,6 +32,12 @@ def create_sequence_example(file_name):
         i_values = []
         q_values = []
 
+        if device not in device_dict:
+            device_dict[device] = cur_device
+            cur_device += 1
+
+        device_num = device_dict[device]
+
         for line in file:
             i, q = line.split(',')
             i_values.append(float(i))
@@ -37,7 +45,8 @@ def create_sequence_example(file_name):
             sample_length += 1
 
         example = tf.train.Example(features=tf.train.Features(feature={
-            "device": _bytes_feature(device.encode()),
+            "device_name": _bytes_feature(device.encode()),
+            "device_num": _int64_feature(device_num),
             "sample_num": _int64_feature(sample_num),
             "length": _int64_feature(sample_length),
             "i_values": _float_list_feature(i_values),
