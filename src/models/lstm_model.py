@@ -5,10 +5,10 @@ import tensorflow as tf
 
 LSTM_HIDDEN_UNITS = 50
 NUM_CLASSES = 2
-LEARNING_RATE = .001
-BATCH_SIZE = 16
+LEARNING_RATE = .01
+BATCH_SIZE = 32
 NUM_EPOCHS = 100
-TRAIN_SEQ_LEN = 2000
+TRAIN_SEQ_LEN = 100
 SEQ_LEN = 8000
 TRAIN_FILE = "../../data/processed/9_23_2017/9_23_2017_train.tfrecord"
 TEST_FILE = "../../data/processed/9_23_2017/9_23_2017_test.tfrecord"
@@ -27,7 +27,10 @@ def lstm(data, actual, name="my_lstm"):
         # We only care about the final state
         last_output = outputs[:, -1, :]
 
-        out_scores = tf.layers.dense(last_output, NUM_CLASSES)
+        initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=None, dtype=tf.float32)
+
+        out_scores = tf.layers.dense(last_output, NUM_CLASSES, kernel_initializer=initializer,
+                                     bias_initializer=initializer)
 
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=out_scores, labels=actual))
 
@@ -69,6 +72,7 @@ def take_random_subsequence(features, size):
 
     # print(iq.shape)
     # return iq
+
     ret_val = tf.random_crop(iq, [size, 2]), features["device_num"]
     return ret_val
 
@@ -138,10 +142,10 @@ with tf.Session() as sess:
             # x = sess.run([data, labels])
             _, loss_val = sess.run([train_op, loss])
 
-            if (i % 10 == 0):
+            if (i % 100 == 0):
                 print("Loss: ", loss_val)
 
-            if (i % 100 == 0):
+            if (i % 1000 == 0):
                 print("Accuracy at step {}: ".format(i),
                       sess.run([test_op], feed_dict={"inputs:0": test_data, "labels:0": test_labels}))
 
