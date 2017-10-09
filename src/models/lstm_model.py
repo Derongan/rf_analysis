@@ -1,17 +1,18 @@
 import random
+import glob
 
 import numpy as np
 import tensorflow as tf
 
 LSTM_HIDDEN_UNITS = 50
 NUM_CLASSES = 2
-LEARNING_RATE = .01
-BATCH_SIZE = 32
+LEARNING_RATE = 1E-2
+BATCH_SIZE = 4
 NUM_EPOCHS = 100
-TRAIN_SEQ_LEN = 100
+TRAIN_SEQ_LEN = 2
 SEQ_LEN = 8000
-TRAIN_FILE = "../../data/processed/9_23_2017/9_23_2017_train.tfrecord"
-TEST_FILE = "../../data/processed/9_23_2017/9_23_2017_test.tfrecord"
+TRAIN_FILES = [glob.glob("../../data/processed/custom/train/*")]
+TEST_FILE = "../../data/processed/custom/test/test_set.tfrecord"
 
 
 def lstm(data, actual, name="my_lstm"):
@@ -25,12 +26,18 @@ def lstm(data, actual, name="my_lstm"):
         # Forward LSTM
         outputs, states = tf.nn.dynamic_rnn(lstm_cell, data, dtype=tf.float32)
         # We only care about the final state
+        print(outputs.shape)
         last_output = outputs[:, -1, :]
+
+        print(last_output.shape)
 
         initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=None, dtype=tf.float32)
 
         out_scores = tf.layers.dense(last_output, NUM_CLASSES, kernel_initializer=initializer,
-                                     bias_initializer=initializer)
+                                                bias_initializer=initializer)
+
+        print(out_scores.shape)
+        print(actual.shape)
 
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=out_scores, labels=actual))
 
@@ -40,7 +47,7 @@ def lstm(data, actual, name="my_lstm"):
 
         test_op = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(prediction, 1), tf.argmax(actual, 1)), tf.float32))
 
-        return train_op, test_op, loss
+        return train_op, test_op, loss, prediction, actual
 
 
 def read_sequence_example(filename_queue):
@@ -52,9 +59,7 @@ def read_sequence_example(filename_queue):
         features={
             'i_values': tf.FixedLenFeature([SEQ_LEN], tf.float32),
             'q_values': tf.FixedLenFeature([SEQ_LEN], tf.float32),
-            "sample_num": tf.FixedLenFeature([], tf.int64),
             "device_num": tf.FixedLenFeature([], tf.int64),
-            'length': tf.FixedLenFeature([], tf.int64)
         })
 
     return features
@@ -70,21 +75,22 @@ def take_random_subsequence(features, size):
 
     iq = tf.stack([features["i_values"], features["q_values"]], axis=1)
 
-    # print(iq.shape)
-    # return iq
+    return iq[:size, :], features["device_num"]
 
-    ret_val = tf.random_crop(iq, [size, 2]), features["device_num"]
-    return ret_val
+    # ret_val = tf.random_crop(iq, [size, 2]), features["device_num"]
+    # return ret_val
 
 
 def get_input(seq_len):
     # Sadly the num_epochs argument is just flat broken? so we do this dumbness
-    filename_queue = tf.train.string_input_producer(
-        [TRAIN_FILE for _ in range(NUM_EPOCHS)])
+    file_list = np.asarray([np.random.permutation(TRAIN_FILES) for _ in range(NUM_EPOCHS)])
+    file_list = file_list.flatten().tolist()
+    filename_queue = tf.train.string_input_producer(file_list)
 
     iq, device_num = take_random_subsequence(read_sequence_example(filename_queue), seq_len)
 
-    device_one_hot = tf.one_hot(device_num, NUM_CLASSES)
+    # -1 cus we start our device nums at 1 right now
+    device_one_hot = tf.one_hot(device_num - 1, NUM_CLASSES)
 
     data, labels = tf.train.shuffle_batch([iq, device_one_hot], batch_size=BATCH_SIZE, capacity=256,
                                           min_after_dequeue=10)
@@ -119,20 +125,21 @@ test_data = np.asarray(test_data)
 test_labels = np.asarray(test_labels)
 
 # Voodoo magic one hot
-n_values = np.max(test_labels) + 1
-test_labels = np.eye(n_values)[test_labels]
+# We subtract one because the current record stores starting at 1 not 0
+n_values = NUM_CLASSES
+test_labels = np.eye(n_values)[test_labels-1]
 
 # make the axis pretty
 test_data = np.transpose(test_data, [1, 2, 0])
 
-train_op, test_op, loss = lstm(data, labels)
+train_op, test_op, loss, prediction_op, actual_op = lstm(data, labels)
 init_op = [tf.global_variables_initializer(), tf.local_variables_initializer()]
 
 with tf.Session() as sess:
     sess.run(init_op)
 
     coord = tf.train.Coordinator()
-    threads = tf.train.start_queue_runners(coord=coord)
+    threads = [tf.train.start_queue_runners(coord=coord) for i in range(16)]
 
     # Always keep track of this. Why not
     i = 0
@@ -140,10 +147,10 @@ with tf.Session() as sess:
     try:
         while True:
             # x = sess.run([data, labels])
-            _, loss_val = sess.run([train_op, loss])
+            _, loss_val, train_accuracy, predictions, actual = sess.run([train_op, loss, test_op, prediction_op, actual_op])
 
-            if (i % 100 == 0):
-                print("Loss: ", loss_val)
+            if (i % 10 == 0):
+                print("Loss: {}, Train Accuracy: {}".format(loss_val, train_accuracy))
 
             if (i % 1000 == 0):
                 print("Accuracy at step {}: ".format(i),
