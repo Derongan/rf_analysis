@@ -21,6 +21,7 @@ class DataLoader:
         :param epochs: The number of epochs to prepare
         :param num_threads: The number of parallel threads to to use
         :param full_seq_len: The number of data points per sample
+        :param noise: Either false/none for no noise, or a tuple containing (mean, stdev) for random normal noise
         """
 
         self.full_seq_len = full_seq_len
@@ -78,7 +79,7 @@ class DataLoader:
             self.data = iq[100:100 + self.crop_size, :]  # Start at 100 to remove blanks
 
         if self.noise:
-            self.data += tf.random_normal(iq.shape)
+            self.data += tf.random_normal(iq.shape, *self.noise)
 
         self.data = self.data[::self.down_sample_step]
 
