@@ -106,6 +106,7 @@ def create_datset(in_root, out_root, shardsize=500, testsize=300):
     LOGGER.info("Saving train shards")
     for i, shard in enumerate(train_file_shards):
         create_record(shard, os.path.join(out_root, "train", "train_set_{}".format(i)), i_min, i_max, q_min, q_max)
+        LOGGER.debug("Finished creating train shard number {}".format(i))
 
 
 if __name__ == "__main__":
