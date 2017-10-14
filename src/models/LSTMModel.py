@@ -26,6 +26,11 @@ class LSTMModel:
             self.learning_rate = kwargs.get("learning_rate", .001)  # The learning rate for the model
             self.timesteps = kwargs["timesteps"]
             self.bidirectional = kwargs.get("bidirectional", False)
+            self.i_only = kwargs.get("i_only", False)
+            self.q_only = kwargs.get("q_only", False)
+
+            # We need to divide the data differently if we are using only p/q
+            divider = 1 if self.i_only or self.q_only else 2
 
             # The number of samples we have to work with
             # must be divisible by the num we feed per recurrent step
@@ -34,8 +39,16 @@ class LSTMModel:
             self.inputs = tf.placeholder_with_default(train_queue[0], shape=(None, self.max_length, 2))
             self.labels = tf.placeholder_with_default(train_queue[1], shape=(None,))
 
-            self.input_reshaped = tf.reshape(self.inputs,
-                                             (-1, self.timesteps, int(2 * (self.max_length / self.timesteps))))
+            shortened_inputs = self.inputs
+
+            # If we are only using I or Q
+            if self.i_only:
+                shortened_inputs = self.inputs[:, :, 0]
+            elif self.q_only:
+                shortened_inputs = self.inputs[:, :, 1]
+
+            self.input_reshaped = tf.reshape(shortened_inputs,
+                                             (-1, self.timesteps, int(divider * (self.max_length / self.timesteps))))
 
             self.train_one_hot = tf.one_hot(self.labels, self.num_classes)
             self.unstacked = tf.unstack(self.input_reshaped, self.timesteps, 1)
@@ -46,7 +59,7 @@ class LSTMModel:
                 self.lstm_layer, _ = tf.nn.static_rnn(lstm_cells, self.unstacked, dtype=tf.float32)
             else:
                 self.lstm_layer, _, _ = tf.nn.static_bidirectional_rnn(lstm_cells, lstm_cells, self.unstacked,
-                                                                    dtype=tf.float32)
+                                                                       dtype=tf.float32)
 
             lstm_last = self.lstm_layer[-1]
 

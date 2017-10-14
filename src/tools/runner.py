@@ -18,7 +18,7 @@ if __name__ == "__main__":
     testLoader = DataLoader(TEST_DATA_DIR, 1, crop_size=INPUT_LEN, randomize_crop=False, batch_size=TEST_COUNT,
                             file_limit=1, down_sample_step=DOWNSAMPLE, noise=False)
     model = LSTMModel(trainLoader.get_samples(), classes=2, max_length=MODEL_IN_LEN, learning_rate=.001, hidden=100,
-                      timesteps=50)
+                      timesteps=50, i_only=True)
 
     with tf.Session() as sess:
         train_writer = tf.summary.FileWriter(LOG_DIR + '/train', sess.graph, flush_secs=5)
